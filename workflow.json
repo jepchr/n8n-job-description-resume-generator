@@ -1,0 +1,297 @@
+{
+  "id": "BfEoJLTqmMQ2wm2k",
+  "name": "Job Description Resume Generator",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Job Description Resume Generator",
+        "formDescription": "Paste job details to generate a tailored resume",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Job Title",
+              "placeholder": "e.g. Senior Content Marketing Manager",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company",
+              "placeholder": "e.g. Acme Corp",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job Description",
+              "fieldType": "textarea",
+              "placeholder": "Paste the full job description here...",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Job URL",
+              "placeholder": "https://... (optional)",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "form-trigger-001",
+      "name": "Submit Job Details",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [112, 512],
+      "webhookId": "job-description-resume"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "https://docs.google.com/document/d/1nkYGAspSoYA3lb3lStGdYVkKd7CRFt53OewhOuazADc/edit"
+      },
+      "id": "get-master-resume-001",
+      "name": "Get Master Resume",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [352, 304],
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "4t6o310Roen45BxB",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "https://docs.google.com/document/d/1KMaK8-Wqud1INyw_VHs3XS0TdO4kX-sX5q8_ZUPKvy8/edit"
+      },
+      "id": "get-prompt-001",
+      "name": "Get Prompt Instructions",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [352, 512],
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "4t6o310Roen45BxB",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "1pSd0QVcsNy1bfZTe6mvb13YIzpEnOo4E_fpPk7H9SuU",
+          "mode": "id"
+        },
+        "name": "=Jeppe Christensen Resume - {{ $('Submit Job Details').item.json.Company }} - {{ $('Submit Job Details').item.json['Job Title'] }} - {{ DateTime.now().toFormat('yyyy-MM-dd') }}",
+        "sameFolder": false,
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1dwuaby-TFvpd_8PrEJ_1WNAvM8wz1tA5",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "copy-template-001",
+      "name": "Copy Resume Template",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [352, 704],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "fYtz9pa1wjW7cJ4v",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-inputs-001",
+      "name": "Wait for All Inputs",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [592, 512]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from each source node\nconst formData = $('Submit Job Details').first().json;\nconst masterResumeDoc = $('Get Master Resume').first().json;\nconst promptInstructionsDoc = $('Get Prompt Instructions').first().json;\nconst copiedDoc = $('Copy Resume Template').first().json;\n\n// Google Docs native node returns 'content' field with plain text\nconst masterResume = masterResumeDoc.content || '';\nconst promptInstructions = promptInstructionsDoc.content || '';\n\nreturn [{\n  json: {\n    job: {\n      title: formData['Job Title'] || '',\n      company: formData.Company || '',\n      description: formData['Job Description'] || '',\n      url: formData['Job URL'] || '',\n      location: ''\n    },\n    masterResume,\n    promptInstructions,\n    copiedDocId: copiedDoc.id,\n    copiedDocName: copiedDoc.name\n  }\n}];"
+      },
+      "id": "prepare-input-001",
+      "name": "Prepare Claude Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [832, 512]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=## JOB DESCRIPTION\nTitle: {{ $json.job.title }}\nCompany: {{ $json.job.company }}\n\n{{ $json.job.description }}\n\n---\n\n## MASTER RESUME\n{{ $json.masterResume }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.promptInstructions }}"
+            }
+          ]
+        }
+      },
+      "id": "generate-resume-001",
+      "name": "Generate Resume Content",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1072, 512]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-opus-4-5-20251101",
+          "mode": "list",
+          "cachedResultName": "Claude Opus 4.5"
+        },
+        "options": {}
+      },
+      "id": "claude-opus-001",
+      "name": "Claude Opus",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [1152, 752],
+      "credentials": {
+        "anthropicApi": {
+          "id": "1dEHV2ZcyiXT2OLc",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's JSON response and prepare for Google Docs replacement\nconst input = $('Prepare Claude Input').item.json;\nconst claudeResponse = $json.text || $json.response || '';\n\n// Extract JSON from Claude's response\nlet content;\ntry {\n  content = JSON.parse(claudeResponse);\n} catch (e) {\n  const jsonMatch = claudeResponse.match(/```json\\n?([\\s\\S]*?)\\n?```/) || \n                    claudeResponse.match(/```\\n?([\\s\\S]*?)\\n?```/) ||\n                    claudeResponse.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    content = JSON.parse(jsonMatch[1] || jsonMatch[0]);\n  } else {\n    throw new Error('Could not parse JSON from Claude response');\n  }\n}\n\n// Build the replacement requests for Google Docs API\nconst replacements = [];\nconst placeholders = [\n  'TAGLINE_1', 'TAGLINE_2', 'TAGLINE_3', 'ABOUT_ME',\n  'SHOPIFY_BULLET_1', 'SHOPIFY_BULLET_2',\n  'NEO4J_BULLET_1', 'NEO4J_BULLET_2', 'NEO4J_BULLET_3', 'NEO4J_BULLET_4', 'NEO4J_BULLET_5',\n  'FIVETRAN_BULLET_1', 'FIVETRAN_BULLET_2', 'FIVETRAN_BULLET_3', 'FIVETRAN_BULLET_4', 'FIVETRAN_BULLET_5',\n  'DENTSU_BULLET_1', 'DENTSU_BULLET_2', 'DENTSU_BULLET_3',\n  'TEXT100_BULLET_1', 'TEXT100_BULLET_2', 'TEXT100_BULLET_3',\n  'REPUBLIC_BULLET_1', 'REPUBLIC_BULLET_2',\n  'COMPETENCY_1', 'COMPETENCY_2', 'COMPETENCY_3', 'COMPETENCY_4', 'COMPETENCY_5',\n  'COMPETENCY_6', 'COMPETENCY_7', 'COMPETENCY_8', 'COMPETENCY_9', 'COMPETENCY_10'\n];\n\nfor (const key of placeholders) {\n  if (content[key]) {\n    replacements.push({\n      replaceAllText: {\n        containsText: {\n          text: '{{' + key + '}}',\n          matchCase: true\n        },\n        replaceText: content[key]\n      }\n    });\n  }\n}\n\nreturn [{\n  json: {\n    documentId: input.copiedDocId,\n    documentName: input.copiedDocName,\n    documentUrl: `https://docs.google.com/document/d/${input.copiedDocId}/edit`,\n    job: input.job,\n    generatedContent: content,\n    requests: replacements\n  }\n}];"
+      },
+      "id": "parse-response-001",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1312, 512]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://docs.googleapis.com/v1/documents/{{ $json.documentId }}:batchUpdate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDocsOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ requests: $json.requests }) }}",
+        "options": {}
+      },
+      "id": "update-doc-001",
+      "name": "Update Doc (Replace Placeholders)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1552, 512],
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "4t6o310Roen45BxB",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1S5i0OIJxXrMBAziWqiSiy3lyAwgzh_aKlydnrciwUuQ",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1098856778,
+          "mode": "list",
+          "cachedResultName": "Processed Jobs"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date Processed ": "={{ DateTime.now().toFormat('yyyy-MM-dd') }}",
+            "Title": "={{ $('Submit Job Details').first().json['Job Title'] }}",
+            "Company": "={{ $('Submit Job Details').first().json.Company }}",
+            "URL": "={{ $('Submit Job Details').first().json['Job URL'] || 'Manual Entry' }}",
+            "Resume URL": "={{ $('Parse Claude Response').first().json.documentUrl }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {"id": "Date Processed ", "displayName": "Date Processed ", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Title", "displayName": "Title", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Company", "displayName": "Company", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "URL", "displayName": "URL", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Resume URL", "displayName": "Resume URL", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "add-processed-001",
+      "name": "Add to Processed Jobs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1792, 512],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "lfejI7lxOGlP5VNs",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Submit Job Details": {
+      "main": [[
+        { "node": "Get Master Resume", "type": "main", "index": 0 },
+        { "node": "Get Prompt Instructions", "type": "main", "index": 0 },
+        { "node": "Copy Resume Template", "type": "main", "index": 0 }
+      ]]
+    },
+    "Get Master Resume": {
+      "main": [[{ "node": "Wait for All Inputs", "type": "main", "index": 0 }]]
+    },
+    "Get Prompt Instructions": {
+      "main": [[{ "node": "Wait for All Inputs", "type": "main", "index": 1 }]]
+    },
+    "Copy Resume Template": {
+      "main": [[{ "node": "Wait for All Inputs", "type": "main", "index": 2 }]]
+    },
+    "Wait for All Inputs": {
+      "main": [[{ "node": "Prepare Claude Input", "type": "main", "index": 0 }]]
+    },
+    "Prepare Claude Input": {
+      "main": [[{ "node": "Generate Resume Content", "type": "main", "index": 0 }]]
+    },
+    "Claude Opus": {
+      "ai_languageModel": [[{ "node": "Generate Resume Content", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Generate Resume Content": {
+      "main": [[{ "node": "Parse Claude Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Claude Response": {
+      "main": [[{ "node": "Update Doc (Replace Placeholders)", "type": "main", "index": 0 }]]
+    },
+    "Update Doc (Replace Placeholders)": {
+      "main": [[{ "node": "Add to Processed Jobs", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  }
+}
