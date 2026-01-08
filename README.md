@@ -1,4 +1,4 @@
-# Job Description Resume Generator
+# Draft Resume Generator - Text
 
 An n8n workflow that generates a tailored resume from a copy-pasted job description.
 
